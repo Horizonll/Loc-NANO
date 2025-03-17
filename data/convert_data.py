@@ -14,7 +14,7 @@ def main():
 
     # 配置存储选项
     storage_options = StorageOptions(
-        uri="./data/amcl/2.db3",  # 替换为你的 bag 文件路径
+        uri="./data/sim/data.db3",  # 替换为你的 bag 文件路径
         storage_id="sqlite3",  # 通常使用 sqlite3 存储
     )
 
@@ -33,16 +33,12 @@ def main():
 
     scan = []
     scan_t = []
-    ground_truth_pose = []
-    ground_truth_ori = []
+    ground_truth = []
     ground_truth_t = []
-    odom_pose = []
-    odom_ori = []
+    odom = []
     odom_t = []
     wheel_vels = []
     wheel_t = []
-    amcl = []
-    gt = []
     while reader.has_next():
         (topic, data, t) = reader.read_next()
         # 根据话题类型反序列化消息
@@ -50,21 +46,11 @@ def main():
         if topic == "/Tracker0/pose":
             msg = deserialize_message(data, PoseStamped)
             ground_truth_t.append(t)
-            ground_truth_pose.append(
-                [
-                    msg.pose.position.x,
-                    msg.pose.position.y,
-                    msg.pose.position.z,
-                ]
+            q = msg.pose.orientation
+            yaw = np.arctan2(
+                2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
             )
-            ground_truth_ori.append(
-                [
-                    msg.pose.orientation.w,
-                    msg.pose.orientation.x,
-                    msg.pose.orientation.y,
-                    msg.pose.orientation.z,
-                ]
-            )
+            ground_truth.append([msg.pose.position.x, msg.pose.position.y, yaw])
 
         if topic == "/scan":
             msg = deserialize_message(data, LaserScan)
@@ -74,22 +60,11 @@ def main():
         if topic == "/odom":
             msg = deserialize_message(data, Odometry)
             odom_t.append(t)
-            odom_pose.append(
-                [
-                    msg.pose.pose.position.x,
-                    msg.pose.pose.position.y,
-                    msg.pose.pose.position.z,
-                ]
+            q = msg.pose.pose.orientation
+            yaw = np.arctan2(
+                2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
             )
-            odom_ori.append(
-                [
-                    msg.pose.pose.orientation.w,
-                    msg.pose.pose.orientation.x,
-                    msg.pose.pose.orientation.y,
-                    msg.pose.pose.orientation.z,
-                ]
-            )
-
+            odom.append([msg.pose.pose.position.x, msg.pose.pose.position.y, yaw])
         if topic == "/wheel_vels":
             msg = deserialize_message(data, WheelVels)
             wheel_t.append(t)
@@ -99,40 +74,59 @@ def main():
                     msg.velocity_right,
                 ]
             )
-        if topic == "/amcl_pose":
-            msg = deserialize_message(data, PoseWithCovarianceStamped)
-            amcl.append([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        # if topic == "/amcl_pose":
+        #     msg = deserialize_message(data, PoseWithCovarianceStamped)
+        #     amcl.append([msg.pose.pose.position.x, msg.pose.pose.position.y])
         if topic == "/sim_ground_truth_pose":
             msg = deserialize_message(data, Odometry())
-            gt.append([msg.pose.pose.position.x, msg.pose.pose.position.y])
+            ground_truth_t.append(t)
+            q = msg.pose.pose.orientation
+            yaw = np.arctan2(
+                2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+            )
+            ground_truth.append(
+                [msg.pose.pose.position.x, msg.pose.pose.position.y, yaw]
+            )
     scan = np.array(scan)
     scan_t = np.array(scan_t)
-    ground_truth_pose = np.array(ground_truth_pose)
-    ground_truth_ori = np.array(ground_truth_ori)
+    ground_truth = np.array(ground_truth)
     ground_truth_t = np.array(ground_truth_t)
-    odom_pose = np.array(odom_pose)
-    odom_ori = np.array(odom_ori)
+    odom = np.array(odom)
     odom_t = np.array(odom_t)
     wheel_vels = np.array(wheel_vels)
     wheel_t = np.array(wheel_t)
-    amcl = np.array(amcl)
-    gt = np.array(gt)
+    # amcl = np.array(amcl)
     all_data = {
         "scan": scan,
         "scan_t": scan_t,
-        "ground_truth_pose": ground_truth_pose,
-        "ground_truth_ori": ground_truth_ori,
+        "ground_truth": ground_truth,
         "ground_truth_t": ground_truth_t,
-        "odom_pose": odom_pose,
-        "odom_ori": odom_ori,
+        "odom": odom,
         "odom_t": odom_t,
         "wheel_vels": wheel_vels,
         "wheel_t": wheel_t,
     }
-    np.save("./data/amcl/2.npy", amcl)
-    # np.savez("./data/real/raw_data.npz", **all_data)
+    np.savez("./data/sim/data.npz", **all_data)
     rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    data = np.load("./data/sim/data.npz")
+    scan = data["scan"]
+    scan_t = data["scan_t"]
+    ground_truth = data["ground_truth"]
+    ground_truth_t = data["ground_truth_t"]
+    odom = data["odom"]
+    odom_t = data["odom_t"]
+    wheel_vels = data["wheel_vels"]
+    wheel_t = data["wheel_t"]
+    # print(scan.shape)
+    # print(scan_t.shape)
+    # print(ground_truth.shape)
+    # print(ground_truth_t.shape)
+    # print(odom.shape)
+    # print(odom_t.shape)
+    # print(wheel_vels.shape)
+    # print(wheel_t.shape)
+    print(scan[0])
