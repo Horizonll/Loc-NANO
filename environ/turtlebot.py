@@ -1,7 +1,8 @@
 import autograd.numpy as np
 from autograd import jacobian
-from .model import Model
+from model import Model
 import cv2
+import matplotlib.pyplot as plt
 
 
 class TurtleBot(Model):
@@ -13,7 +14,7 @@ class TurtleBot(Model):
     ):
         super().__init__(self)
         self.dim_x = 3
-        self.dim_y = 3
+        self.dim_y = 640
         self.dt = 1.0 / 15
         self.x0 = np.array([0.0, 0.0, 0.0])
         self.P0 = np.diag(np.array([0.0001, 0.0001, 0.0001])) ** 2
@@ -28,7 +29,7 @@ class TurtleBot(Model):
         self.Q = np.diag(self.process_std**2)
         self.R = np.diag(self.observation_std**2)
         self.map_info = self.read_map_yaml("./data/sim/map.yaml")
-        self.map_raw = cv2.imread(self.map_info["image"], cv2.IMREAD_GRAYSCALE)
+        self.map = cv2.imread(self.map_info["image"], cv2.IMREAD_GRAYSCALE)
 
     def f(self, x, u):
         v = (u[0] + u[1]) / 2
@@ -42,8 +43,68 @@ class TurtleBot(Model):
         )
 
     def h(self, x):
+        return x
 
-        return np.array()
+    def h(self, x):
+        angles = np.linspace(-np.pi, np.pi, 640)
+        distances = np.zeros(640)
+        resolution = self.map_info["resolution"]
+        origin = self.map_info["origin"]
+        map_height, map_width = self.map.shape
+
+        for i, angle in enumerate(angles):
+            distance = 0
+            hit = False
+            while not hit:
+                distance += resolution
+                laser_x = x[0] + distance * np.cos(x[2] + angle)
+                laser_y = x[1] + distance * np.sin(x[2] + angle)
+
+                map_x = int((laser_x - origin[0]) / resolution)
+                map_y = int((laser_y - origin[1]) / resolution)
+
+                if map_x < 0 or map_x >= map_width or map_y < 0 or map_y >= map_height:
+                    hit = True
+                    distance = np.inf
+                elif self.map[map_y, map_x] == 0:
+                    hit = True
+
+            distances[i] = distance
+
+        return distances
+
+    def visualize_lidar(self, x):
+        distances = self.h(x)
+        angles = np.linspace(-np.pi, np.pi, 640)
+
+        plt.imshow(self.map, cmap="gray")
+        plt.scatter(
+            (x[0] - self.map_info["origin"][0]) / self.map_info["resolution"],
+            (x[1] - self.map_info["origin"][1]) / self.map_info["resolution"],
+            c="red",
+        )
+
+        for angle, distance in zip(angles, distances):
+            if distance < np.inf:
+                laser_x = x[0] + distance * np.cos(x[2] + angle)
+                laser_y = x[1] + distance * np.sin(x[2] + angle)
+                plt.plot(
+                    [
+                        (x[0] - self.map_info["origin"][0])
+                        / self.map_info["resolution"],
+                        (laser_x - self.map_info["origin"][0])
+                        / self.map_info["resolution"],
+                    ],
+                    [
+                        (x[1] - self.map_info["origin"][1])
+                        / self.map_info["resolution"],
+                        (laser_y - self.map_info["origin"][1])
+                        / self.map_info["resolution"],
+                    ],
+                    c="blue",
+                )
+
+        plt.show()
 
     def read_map_yaml(self, yaml_file):
         with open(yaml_file, "r") as f:
@@ -99,3 +160,8 @@ class TurtleBot(Model):
 
     def jac_h(self, x_hat, u=0):
         return jacobian(lambda x: self.h(x))(x_hat)
+
+
+# A = TurtleBot()
+# robot_position = np.array([2.0, 0.0, 0.0])
+# A.visualize_lidar(robot_position)
