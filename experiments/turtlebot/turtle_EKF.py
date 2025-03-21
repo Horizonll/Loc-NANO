@@ -4,8 +4,8 @@ from math import sqrt
 import autograd.numpy as np
 from tqdm import tqdm
 
-# sys.path.append("/home/hrz/NANO-filter")
-# sys.path.append("D:/code/NANO-filter")
+sys.path.append("/home/hrz/NANO-filter")
+sys.path.append("D:/code/NANO-filter")
 sys.path.append("./")
 
 from filter import NANO, EKF, UKF
@@ -48,15 +48,15 @@ if __name__ == "__main__":
 
     for i in tqdm(range(0, pos_gt.shape[0])):
         u = wheel_vel[i]
-        y = scan[i][::4]
-        # x = odom[i]
+        y = scan[i][::10]
+        x = odom[i]
         time1 = time.time()
-        filter.predict(u)
+        filter.predict(x)
         filter.update(y)
         time2 = time.time()
         x_pred.append(filter.x)
         all_time.append(time2 - time1)
-        print(sqrt(np.sum((x_pred[-1] - pos_gt[i]) ** 2)))
+        # print(sqrt(np.sum((x_pred[-1] - pos_gt[i]) ** 2)))
     x_pred = np.array(x_pred)
     mean_time = np.mean(all_time)
     np.save("./results/turtle_ekf.npy", x_pred)

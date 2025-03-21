@@ -14,8 +14,8 @@ class TurtleBot(Model):
     ):
         super().__init__(self)
         self.dim_x = 3
-        self.dim_y = 160
-        self.dt = 1.0 / 15
+        self.dim_y = 64
+        self.dt = 0.02294290509717218
         self.x0 = np.array([0.0, 0.0, 0.0])
         self.P0 = np.diag(np.array([0.0001, 0.0001, 0.0001])) ** 2
         self.state_outlier_flag = state_outlier_flag
@@ -23,15 +23,15 @@ class TurtleBot(Model):
         self.noise_type = noise_type
         self.alpha = 2.0
         self.beta = 5.0
-        self.process_std = np.array([0.01] * self.dim_x)
-        self.observation_std = np.array([0.01] * self.dim_y)
-        self.obs_var = np.ones(self.dim_y) * 0.01
+        self.process_std = np.array([0.0001] * self.dim_x)
+        self.observation_std = np.array([0.0001] * self.dim_y)
+        self.obs_var = np.ones(self.dim_y) * 0.0001
         self.Q = np.diag(self.process_std**2)
         self.R = np.diag(self.observation_std**2)
         self.map_info = self.read_map_yaml("./data/sim/map.yaml")
         self.map = cv2.rotate(
             cv2.imread(self.map_info["image"], cv2.IMREAD_GRAYSCALE),
-            cv2.ROTATE_90_COUNTERCLOCKWISE,
+            cv2.ROTATE_90_CLOCKWISE * 2,
         )
 
     def f(self, x, u=None):
@@ -48,29 +48,38 @@ class TurtleBot(Model):
         )
 
     def h(self, x):
-        angles = np.linspace(-np.pi, np.pi, 160)
-        distances = np.zeros(160)
+        angles = np.linspace(np.pi, -np.pi, self.dim_y)
+        distances = np.zeros(self.dim_y)
         resolution = self.map_info["resolution"]
-        origin = self.map_info["origin"]
+        origin_x, origin_y, _ = self.map_info["origin"]
         map_height, map_width = self.map.shape
-        for i, angle in enumerate(angles):
+        cos_angles = np.cos(x[2] + angles)
+        sin_angles = np.sin(x[2] + angles)
+        for i in range(self.dim_y):
             distance = 0
             hit = False
-            while not hit:
+            while not hit and distance < 12:
                 distance += resolution
-                laser_x = x[0] + distance * np.cos(x[2] + angle)
-                laser_y = x[1] + distance * np.sin(x[2] + angle)
+                laser_x = x[0] + distance * cos_angles[i]
+                laser_y = x[1] + distance * sin_angles[i]
                 try:
                     laser_x, laser_y = laser_x._value, laser_y._value
                 except:
                     pass
-                map_x = int((laser_x - origin[0]) / resolution)
-                map_y = int((laser_y - origin[1]) / resolution)
-                if map_x < 0 or map_x >= map_width or map_y < 0 or map_y >= map_height:
-                    hit = True
-                    distance = np.inf
-                elif self.map[map_y, map_x] == 0:
-                    hit = True
+                try:
+                    map_x = int((laser_x - origin_x) / resolution)
+                    map_y = int((laser_y - origin_y) / resolution)
+                    if (
+                        map_x < 0
+                        or map_x >= map_width
+                        or map_y < 0
+                        or map_y >= map_height
+                        or self.map[map_y, map_x] == 0
+                    ):
+                        hit = True
+                except:
+                    print(x)
+                    exit()
             distances[i] = distance
         return distances
 
@@ -79,7 +88,7 @@ class TurtleBot(Model):
             distances = scan
         else:
             distances = self.h(x)
-        angles = np.linspace(-np.pi, np.pi, 640)
+        angles = np.linspace(np.pi, -np.pi, self.dim_y)
         plt.imshow(self.map, cmap="gray")
         plt.scatter(
             (x[0] - self.map_info["origin"][0]) / self.map_info["resolution"],
@@ -156,16 +165,22 @@ class TurtleBot(Model):
                 loc=0, scale=self.obs_var, size=(self.dim_y,)
             )
 
-    def jac_f(self, x_hat, u=0):
-        return jacobian(lambda x: self.f(x, u))(x_hat)
+    def jac_f(self, x_hat):
+        return jacobian(lambda x: self.f(x))(x_hat)
 
     def jac_h(self, x_hat, u=0):
         return jacobian(lambda x: self.h(x))(x_hat)
 
 
 # A = TurtleBot()
-# robot_position = np.array([0.0, 0.0, 0.0])
+# robot_position = np.array([0.0, 0.0, 0])
 # # A.visualize_lidar(robot_position)
 # data = np.load("./data/sim/data.npz")
 # scan = data["scan"]
-# A.visualize_lidar(robot_position, scan=None)
+# ground_truth = data["ground_truth"]
+# ground_truth_t = data["ground_truth_t"] / 1e9
+# time_intervals = np.diff(ground_truth_t)
+# average_interval = np.mean(time_intervals)
+# print("Average interval:", average_interval)
+# print(ground_truth_t[0])
+# A.visualize_lidar(robot_position, scan=scan[0][::10])
