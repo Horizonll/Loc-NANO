@@ -14,7 +14,7 @@ class TurtleBot(Model):
     ):
         super().__init__(self)
         self.dim_x = 3
-        self.dim_y = 64
+        self.dim_y = 640 // 2
         self.dt = 0.02294290509717218
         self.x0 = np.array([0.0, 0.0, 0.0])
         self.P0 = np.diag(np.array([0.0001, 0.0001, 0.0001])) ** 2
@@ -23,9 +23,9 @@ class TurtleBot(Model):
         self.noise_type = noise_type
         self.alpha = 2.0
         self.beta = 5.0
-        self.process_std = np.array([0.0001] * self.dim_x)
-        self.observation_std = np.array([0.0001] * self.dim_y)
-        self.obs_var = np.ones(self.dim_y) * 0.0001
+        self.process_std = np.array([0.01] * self.dim_x)
+        self.observation_std = np.array([0.01] * self.dim_y)
+        self.obs_var = np.ones(self.dim_y) * 0.01
         self.Q = np.diag(self.process_std**2)
         self.R = np.diag(self.observation_std**2)
         self.map_info = self.read_map_yaml("./data/sim/map.yaml")
@@ -33,10 +33,13 @@ class TurtleBot(Model):
             cv2.imread(self.map_info["image"], cv2.IMREAD_GRAYSCALE),
             cv2.ROTATE_90_CLOCKWISE * 2,
         )
+        self.angles = np.linspace(np.pi, -np.pi, self.dim_y)
 
     def f(self, x, u=None):
         if u is None:
-            return x
+            return x + np.random.multivariate_normal(
+                mean=np.zeros(self.dim_x), cov=self.Q
+            )
         v = (u[0] + u[1]) / 2
         w = (u[0] - u[1]) / 0.233
         return np.array(
@@ -48,18 +51,13 @@ class TurtleBot(Model):
         )
 
     def h(self, x):
-        angles = np.linspace(np.pi, -np.pi, self.dim_y)
         distances = np.zeros(self.dim_y)
-        resolution = self.map_info["resolution"]
-        origin_x, origin_y, _ = self.map_info["origin"]
-        map_height, map_width = self.map.shape
-        cos_angles = np.cos(x[2] + angles)
-        sin_angles = np.sin(x[2] + angles)
+        cos_angles = np.cos(x[2] + self.angles)
+        sin_angles = np.sin(x[2] + self.angles)
         for i in range(self.dim_y):
             distance = 0
-            hit = False
-            while not hit and distance < 12:
-                distance += resolution
+            while distance < 12:
+                distance += self.map_info["resolution"]
                 laser_x = x[0] + distance * cos_angles[i]
                 laser_y = x[1] + distance * sin_angles[i]
                 try:
@@ -67,16 +65,22 @@ class TurtleBot(Model):
                 except:
                     pass
                 try:
-                    map_x = int((laser_x - origin_x) / resolution)
-                    map_y = int((laser_y - origin_y) / resolution)
+                    map_x = int(
+                        (laser_x - self.map_info["origin"][0])
+                        / self.map_info["resolution"]
+                    )
+                    map_y = int(
+                        (laser_y - self.map_info["origin"][1])
+                        / self.map_info["resolution"]
+                    )
                     if (
                         map_x < 0
-                        or map_x >= map_width
+                        or map_x >= self.map.shape[1]
                         or map_y < 0
-                        or map_y >= map_height
+                        or map_y >= self.map.shape[0]
                         or self.map[map_y, map_x] == 0
                     ):
-                        hit = True
+                        break
                 except:
                     print(x)
                     exit()

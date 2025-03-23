@@ -45,19 +45,21 @@ if __name__ == "__main__":
 
     x_pred = []
     all_time = []
-
-    for i in tqdm(range(0, pos_gt.shape[0])):
-        u = wheel_vel[i]
-        y = scan[i][::10]
-        x = odom[i]
-        time1 = time.time()
-        filter.predict(x)
-        filter.update(y)
-        time2 = time.time()
-        x_pred.append(filter.x)
-        all_time.append(time2 - time1)
-        # print(sqrt(np.sum((x_pred[-1] - pos_gt[i]) ** 2)))
-    x_pred = np.array(x_pred)
-    mean_time = np.mean(all_time)
-    np.save("./results/turtle_ekf.npy", x_pred)
-    print("solve time: ", mean_time)
+    # 24651
+    try:
+        for i in tqdm(range(0, 4000)):
+            u = wheel_vel[i]
+            y = scan[i][::2]
+            x = odom[i]
+            time1 = time.time()
+            filter.predict(x)
+            filter.update(y)
+            time2 = time.time()
+            x_pred.append(filter.x)
+            all_time.append(time2 - time1)
+            # print(sqrt(np.sum((x_pred[-1] - pos_gt[i]) ** 2)))
+    finally:
+        x_pred = np.array(x_pred)
+        mean_time = np.mean(all_time)
+        np.save("./results/turtle_ekf.npy", x_pred)
+        print("solve time: ", mean_time)
