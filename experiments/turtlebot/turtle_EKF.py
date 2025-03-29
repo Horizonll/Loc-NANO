@@ -37,7 +37,7 @@ if __name__ == "__main__":
     wheel_vel = np.array(wheel_vel_)
     odom = np.array(odom_)
 
-    x0 = np.array([pos_gt[0, 0], pos_gt[0, 1], pos_gt[0, 2]])
+    x0 = np.array([pos_gt[2000, 0], pos_gt[2000, 1], pos_gt[2000, 2]])
 
     model = TurtleBot()
     model.x0 = x0
@@ -47,9 +47,9 @@ if __name__ == "__main__":
     all_time = []
     # 24651
     try:
-        for i in tqdm(range(0, 4000)):
+        for i in tqdm(range(2000, 4000)):
             u = wheel_vel[i]
-            y = scan[i][::2]
+            y = scan[i][::80]
             x = odom[i]
             time1 = time.time()
             filter.predict(x)
@@ -57,7 +57,10 @@ if __name__ == "__main__":
             time2 = time.time()
             x_pred.append(filter.x)
             all_time.append(time2 - time1)
-            # print(sqrt(np.sum((x_pred[-1] - pos_gt[i]) ** 2)))
+            print(
+                sqrt(np.sum((x_pred[-1] - pos_gt[i]) ** 2))
+                - sqrt(np.sum((x - pos_gt[i]) ** 2))
+            )
     finally:
         x_pred = np.array(x_pred)
         mean_time = np.mean(all_time)

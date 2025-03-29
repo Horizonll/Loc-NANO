@@ -31,6 +31,7 @@ class EKF(ExtendedKalmanFilter):
         self.S = H @ PHT + self.R
         self.K = PHT @ np.linalg.inv(self.S)
         self.x = self.x + self.K @ (y - hx)
+        # print(self.K @ (y - hx))
         I_KH = self._I - self.K @ H
         self.P = (I_KH @ self.P @ I_KH.T) + (self.K @ self.R @ self.K.T)
         self.x_post = self.x.copy()
