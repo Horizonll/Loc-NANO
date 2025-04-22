@@ -1,4 +1,4 @@
-image: ./data/sim/map.pgm
+image: ./data/sim/maze.pgm
 mode: trinary
 resolution: 0.05
 origin: [-10, -10, 0]

@@ -26,9 +26,9 @@ class PF:
         self.x_prior = self.x.copy()
         self.x_post = self.x.copy()
 
-    def predict(self):
+    def predict(self, u):
         for i in range(self.num_particles):
-            self.particles[i] = self.f(self.particles[i]) + np.random.multivariate_normal(self.ex,
+            self.particles[i] = self.f(self.particles[i], u) + np.random.multivariate_normal(self.ex,
                                                                                           self.Q)
         self.x_prior = np.average(self.particles, weights=self.weights, axis=0)
         self.x = self.x_prior.copy()

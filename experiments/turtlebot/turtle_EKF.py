@@ -8,13 +8,13 @@ sys.path.append("/home/hrz/NANO-filter")
 sys.path.append("D:/code/NANO-filter")
 sys.path.append("./")
 
-from filter import EKF, UKF
+from filter import EKF, UKF, PF, NANO
 from environ import TurtleBot
 
 np.random.seed(42)
 
 if __name__ == "__main__":
-    data = np.load("./data/sim/data.npz")
+    data = np.load("./data/sim/data1.npz")
     scan = data["scan"]
     scan_t = data["scan_t"]
     wheel_vel = data["wheel_vels"]
@@ -40,14 +40,13 @@ if __name__ == "__main__":
     x0 = np.array([pos_gt[a, 0], pos_gt[a, 1], pos_gt[a, 2]])
     model = TurtleBot()
     model.x0 = x0
-    filter = UKF(model)
+    filter = NANO(model, n_iterations=1, init_type="iekf", iekf_max_iter=1, lr=1)
     x_pred = []
     all_time = []
-    # 3690
     try:
-        for i in tqdm(range(a, 3690)):
+        for i in tqdm(range(a, len(pos_gt) - 1)):
             u = odom[i + 1] - odom[i]
-            y = scan[i][::80]
+            y = model.h(pos_gt[i] + np.random.normal(0, 0.01, 3))
             x = odom[i]
             time1 = time.time()
             filter.predict(u)
@@ -55,7 +54,7 @@ if __name__ == "__main__":
             time2 = time.time()
             x_pred.append(filter.x)
             all_time.append(time2 - time1)
-            # print(sqrt(np.sum((x_pred[-1] - pos_gt[i]) ** 2)))
+            # print(sqrt(np.sum((x_pred[-1][:-1] - pos_gt[i][:-1]) ** 2)))
     finally:
         x_pred = np.array(x_pred)
         np.save("./results/turtle_ekf.npy", x_pred)

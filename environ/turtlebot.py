@@ -3,6 +3,7 @@ from autograd import jacobian
 from .model import Model
 import cv2
 import matplotlib.pyplot as plt
+from math import sqrt
 
 
 class TurtleBot(Model):
@@ -14,18 +15,18 @@ class TurtleBot(Model):
     ):
         super().__init__(self)
         self.dim_x = 3
-        self.dim_y = 640 // 80
+        self.dim_y = 2
         self.dt = 0.02294290509717218
         self.x0 = np.array([0.0, 0.0, 0.0])
-        self.P0 = np.diag(np.array([0.0001, 0.0001, 0.0001])) ** 2
+        self.P0 = np.diag(np.array([0.1, 0.1, 0.1])) ** 2
         self.state_outlier_flag = state_outlier_flag
         self.measurement_outlier_flag = measurement_outlier_flag
         self.noise_type = noise_type
         self.alpha = 2.0
         self.beta = 5.0
-        self.process_std = np.array([0.001] * self.dim_x)
-        self.observation_std = np.array([0.001] * self.dim_y)
-        self.obs_var = np.ones(self.dim_y) * 0.001
+        self.process_std = np.array([0.1] * self.dim_x)
+        self.observation_std = np.array([0.1] * self.dim_y)
+        self.obs_var = np.ones(self.dim_y) * 0.1
         self.Q = np.diag(self.process_std**2)
         self.R = np.diag(self.observation_std**2)
         self.map_info = self.read_map_yaml("./data/sim/map.yaml")
@@ -48,30 +49,35 @@ class TurtleBot(Model):
         # )
 
     def h(self, x):
-        distances = np.zeros(self.dim_y)
-        cos_angles = np.cos(x[2] + self.angles)
-        sin_angles = np.sin(x[2] + self.angles)
-        for i in range(self.dim_y):
-            distance = 0
-            while distance < 12:
-                distance += 5e-4
-                laser_x = x[0] + distance * cos_angles[i]
-                laser_y = x[1] + distance * sin_angles[i]
-                map_x = int(
-                    (laser_x - self.map_info["origin"][0]) / self.map_info["resolution"]
-                )
-                map_y = int(
-                    (laser_y - self.map_info["origin"][1]) / self.map_info["resolution"]
-                )
-                if (
-                    map_x < 0
-                    or map_x >= self.map.shape[1]
-                    or map_y < 0
-                    or map_y >= self.map.shape[0]
-                    or self.map[map_y, map_x] == 0
-                ):
-                    break
-            distances[i] = distance
+        # distances = np.zeros(self.dim_y)
+        # cos_angles = np.cos(x[2] + self.angles)
+        # sin_angles = np.sin(x[2] + self.angles)
+        # for i in range(self.dim_y):
+        #     distance = 0
+        #     while distance < 12:
+        #         distance += 5e-4
+        #         laser_x = x[0] + distance * cos_angles[i]
+        #         laser_y = x[1] + distance * sin_angles[i]
+        #         map_x = int(
+        #             (laser_x - self.map_info["origin"][0]) / self.map_info["resolution"]
+        #         )
+        #         map_y = int(
+        #             (laser_y - self.map_info["origin"][1]) / self.map_info["resolution"]
+        #         )
+        #         if (
+        #             map_x < 0
+        #             or map_x >= self.map.shape[1]
+        #             or map_y < 0
+        #             or map_y >= self.map.shape[0]
+        #             or self.map[map_y, map_x] == 0
+        #         ):
+        #             break
+        #     distances[i] = distance
+        # return distances
+        position = np.array([[-5, 5], [-5, -5]])
+        distances = np.array(
+            [sqrt((x[0] - p[0]) ** 2 + (x[1] - p[1]) ** 2 - 0.1) for p in position]
+        )
         return distances
 
     def jac_h(self, x):
