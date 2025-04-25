@@ -4,6 +4,7 @@ from .model import Model
 import cv2
 import matplotlib.pyplot as plt
 from math import sqrt
+import yaml
 
 
 class TurtleBot(Model):
@@ -15,7 +16,7 @@ class TurtleBot(Model):
     ):
         super().__init__(self)
         self.dim_x = 3
-        self.dim_y = 2
+        self.dim_y = 3
         self.dt = 0.02294290509717218
         self.x0 = np.array([0.0, 0.0, 0.0])
         self.P0 = np.diag(np.array([0.1, 0.1, 0.1])) ** 2
@@ -29,7 +30,7 @@ class TurtleBot(Model):
         self.obs_var = np.ones(self.dim_y) * 0.1
         self.Q = np.diag(self.process_std**2)
         self.R = np.diag(self.observation_std**2)
-        self.map_info = self.read_map_yaml("./data/sim/map.yaml")
+        self.map_info = self.read_map_yaml("./data/sim/a.yaml")
         self.map = cv2.rotate(
             cv2.imread(self.map_info["image"], cv2.IMREAD_GRAYSCALE),
             cv2.ROTATE_90_CLOCKWISE * 2,
@@ -74,10 +75,8 @@ class TurtleBot(Model):
         #             break
         #     distances[i] = distance
         # return distances
-        position = np.array([[-5, 5], [-5, -5]])
-        distances = np.array(
-            [sqrt((x[0] - p[0]) ** 2 + (x[1] - p[1]) ** 2 - 0.1) for p in position]
-        )
+        position = np.array([[10, 10], [-10, -10], [10, -10]])
+        distances = np.sqrt(np.sum((x[:2] - position) ** 2, axis=1) - 0.1)
         return distances
 
     def jac_h(self, x):
@@ -137,17 +136,7 @@ class TurtleBot(Model):
 
     def read_map_yaml(self, yaml_file):
         with open(yaml_file, "r") as f:
-            lines = f.readlines()
-            map_info = {}
-            for line in lines:
-                key, value = line.strip().split(": ")
-                if key == "image":
-                    map_info[key] = value
-                elif key == "resolution":
-                    map_info[key] = float(value)
-                elif key == "origin":
-                    map_info[key] = [float(x) for x in value.strip("[]").split(", ")]
-        return map_info
+            return yaml.safe_load(f)
 
     def f_withnoise(self, x, u=None):
         if self.state_outlier_flag:
