@@ -127,7 +127,7 @@ def main():
     x0 = np.array([pos_gt[0, 0], pos_gt[0, 1], pos_gt[0, 2]])
     model = TurtleBot()
     model.x0 = x0
-    filter = UKF(model)
+    filter = NANO(model, n_iterations=1, init_type="iekf", iekf_max_iter=1, lr=1)
 
     x_pred, all_time, scan_pose = [], [], []
     for i in tqdm(range(len(pos_gt) - 1)):
@@ -146,7 +146,7 @@ def main():
         #         + (filter.x[1] - scan_pose[-1][1]) ** 2
         #     )
         # )
-        np.save("./results/ukf.npy", np.array(x_pred))
+        np.save("./results/nano.npy", np.array(x_pred))
     # np.save("./results/turtle_scan_pose.npy", np.array(scan_pose))
     print(f"{np.mean(all_time):.4f} s")
 
