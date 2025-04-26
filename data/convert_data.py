@@ -14,8 +14,8 @@ def main():
 
     # 配置存储选项
     storage_options = StorageOptions(
-        uri="./data/sim/data.db3",  # 替换为你的 bag 文件路径
-        storage_id="sqlite3",  # 通常使用 sqlite3 存储
+        uri="./data/sim/data.mcap",  # 替换为你的 bag 文件路径
+        storage_id="mcap",  # 通常使用 sqlite3 存储
     )
 
     # 配置转换选项
@@ -111,7 +111,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
+    main()
     data = np.load("./data/sim/data.npz")
     scan = data["scan"]
     scan_t = data["scan_t"]

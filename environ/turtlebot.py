@@ -17,7 +17,7 @@ class TurtleBot(Model):
         super().__init__(self)
         self.dim_x = 3
         self.dim_y = 3
-        self.dt = 0.02294290509717218
+        self.dt = 0.02
         self.x0 = np.array([0.0, 0.0, 0.0])
         self.P0 = np.diag(np.array([0.1, 0.1, 0.1])) ** 2
         self.state_outlier_flag = state_outlier_flag
@@ -30,7 +30,7 @@ class TurtleBot(Model):
         self.obs_var = np.ones(self.dim_y) * 0.1
         self.Q = np.diag(self.process_std**2)
         self.R = np.diag(self.observation_std**2)
-        self.map_info = self.read_map_yaml("./data/sim/a.yaml")
+        self.map_info = self.read_map_yaml("./data/sim/map.yaml")
         self.map = cv2.rotate(
             cv2.imread(self.map_info["image"], cv2.IMREAD_GRAYSCALE),
             cv2.ROTATE_90_CLOCKWISE * 2,

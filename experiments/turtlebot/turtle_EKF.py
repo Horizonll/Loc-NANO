@@ -1,15 +1,13 @@
 import sys
 import time
+import os
 from math import sqrt
 import autograd.numpy as np
 from tqdm import tqdm
 import cv2
 import open3d as o3d
 
-sys.path.append("/home/hrz/NANO-filter")
-sys.path.append("D:/code/NANO-filter")
-sys.path.append("./")
-
+sys.path.append(os.path.abspath("./"))
 from filter import EKF, UKF, PF, NANO
 from environ import TurtleBot
 
@@ -42,7 +40,7 @@ def lidar_to_point_cloud(lidar_data, angle_min, angle_max):
     return points
 
 
-def icp_registration(source_points, target_points):
+def icp_registration(source_points, target_points, init_x=0, init_y=0, init_yaw=0):
     """
     使用ICP进行点云精细配准
     """
@@ -50,12 +48,19 @@ def icp_registration(source_points, target_points):
     source.points = o3d.utility.Vector3dVector(source_points)
     target = o3d.geometry.PointCloud()
     target.points = o3d.utility.Vector3dVector(target_points)
-    threshold = 100
+    threshold = 10000
     transformation = o3d.pipelines.registration.registration_icp(
         source,
         target,
         threshold,
-        np.identity(4),
+        np.array(
+            [
+                [np.cos(init_yaw), -np.sin(init_yaw), 0, init_x],
+                [np.sin(init_yaw), np.cos(init_yaw), 0, init_y],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ]
+        ),
         o3d.pipelines.registration.TransformationEstimationPointToPoint(),
     )
     return transformation.transformation
@@ -71,9 +76,11 @@ def extract_pose(transformation):
     return x, y, yaw
 
 
-def scan_to_pose(scan, map_points, angle_min, angle_max):
+def scan_to_pose(scan, map_points, angle_min, angle_max, init_pose):
     lidar_points = lidar_to_point_cloud(scan, angle_min, angle_max)
-    transformation = icp_registration(lidar_points, map_points)
+    transformation = icp_registration(
+        lidar_points, map_points, init_pose[0], init_pose[1], init_pose[2] + np.pi
+    )
     x, y, yaw = extract_pose(transformation)
     dx1, dy1 = x - 10, y - 10
     dx2, dy2 = x + 10, y + 10
@@ -84,58 +91,61 @@ def scan_to_pose(scan, map_points, angle_min, angle_max):
     return x, y, y1, y2, y3
 
 
-if __name__ == "__main__":
-    map_path = "./data/sim/a.pgm"
+def synchronize_data(time_gt, scan_t, wheel_t, odom_t, scan, wheel_vel, odom):
+    """
+    同步数据到统一时间戳
+    """
+    scan_, wheel_vel_, odom_ = [], [], []
+    for t in time_gt:
+        scan_.append(scan[np.argmin(np.abs(scan_t - t))])
+        wheel_vel_.append(wheel_vel[np.argmin(np.abs(wheel_t - t))])
+        odom_.append(odom[np.argmin(np.abs(odom_t - t))])
+    return np.array(scan_), np.array(wheel_vel_), np.array(odom_)
+
+
+def main():
+    map_path = "./data/sim/map.pgm"
     resolution = 0.05
     origin = [-10, -10, 0]
-    map_points = load_map(map_path, resolution, origin)
     angle_min = -np.pi * 1.5
     angle_max = np.pi / 2
+    map_points = load_map(map_path, resolution, origin)
+
     data = np.load("./data/sim/data.npz")
-    scan = data["scan"]
-    scan_t = data["scan_t"]
-    wheel_vel = data["wheel_vels"]
-    wheel_t = data["wheel_t"]
-    pos_gt = data["ground_truth"]
-    time_gt = data["ground_truth_t"]
-    odom = data["odom"]
-    odom_t = data["odom_t"]
-    scan_ = []
-    wheel_vel_ = []
-    odom_ = []
-    for t in time_gt:
-        idx = np.argmin(np.abs(scan_t - t))
-        scan_.append(scan[idx])
-        idx = np.argmin(np.abs(wheel_t - t))
-        wheel_vel_.append(wheel_vel[idx])
-        idx = np.argmin(np.abs(odom_t - t))
-        odom_.append(odom[idx])
-    scan = np.array(scan_)
-    wheel_vel = np.array(wheel_vel_)
-    odom = np.array(odom_)
-    a = 0
-    x0 = np.array([pos_gt[a, 0], pos_gt[a, 1], pos_gt[a, 2]])
+    scan, scan_t = data["scan"], data["scan_t"]
+    wheel_vel, wheel_t = data["wheel_vels"], data["wheel_t"]
+    pos_gt, time_gt = data["ground_truth"], data["ground_truth_t"]
+    odom, odom_t = data["odom"], data["odom_t"]
+
+    scan, wheel_vel, odom = synchronize_data(
+        time_gt, scan_t, wheel_t, odom_t, scan, wheel_vel, odom
+    )
+    x0 = np.array([pos_gt[0, 0], pos_gt[0, 1], pos_gt[0, 2]])
     model = TurtleBot()
     model.x0 = x0
-    filter = UKF(model)
-    x_pred = []
-    all_time = []
-    scan_pose = []
-    for i in tqdm(range(a, len(pos_gt) - 1)):
-        u = odom[i + 1] - odom[i]
-        y = scan_to_pose(scan[i], map_points, angle_min, angle_max)
-        scan_pose.append(y[:2])
-        time1 = time.time()
-        filter.predict(u)
-        error = (pos_gt[i][0] - y[0]) ** 2 + (pos_gt[i][1] - y[1]) ** 2
-        if error < 0.16:
-            filter.update(y[2:])
-        time2 = time.time()
-        x_pred.append(filter.x)
-        all_time.append(time2 - time1)
+    filter = PF(model, 1000)
 
-    x_s = np.array(x_pred)
-    np.save("./results/turtle_ekf.npy", x_s)
-    np.save("./results/turtle_scan_pose.npy", np.array(scan_pose))
-    mean_time = np.mean(all_time)
-    print("solve time: ", mean_time)
+    x_pred, all_time, scan_pose = [], [], []
+    for i in tqdm(range(len(pos_gt) - 1)):
+        u = odom[i + 1] - odom[i]
+        y = scan_to_pose(scan[i], map_points, angle_min, angle_max, filter.x)
+        # scan_pose.append(y[:2])
+        start_time = time.time()
+        filter.predict(u)
+        filter.update(y[-3:])
+        end_time = time.time()
+        x_pred.append(filter.x)
+        all_time.append(end_time - start_time)
+        # print(
+        #     sqrt(
+        #         (filter.x[0] - scan_pose[-1][0]) ** 2
+        #         + (filter.x[1] - scan_pose[-1][1]) ** 2
+        #     )
+        # )
+    np.save("./results/pf.npy", np.array(x_pred))
+    # np.save("./results/turtle_scan_pose.npy", np.array(scan_pose))
+    print(f"{np.mean(all_time):.4f} s")
+
+
+if __name__ == "__main__":
+    main()
