@@ -75,7 +75,7 @@ class TurtleBot(Model):
         #             break
         #     distances[i] = distance
         # return distances
-        position = np.array([[10, 10], [-10, -10], [10, -10]])
+        position = np.array([[10, 10], [-10, -10], [5, -10]])
         distances = np.sqrt(np.sum((x[:2] - position) ** 2, axis=1) - 0.1)
         return distances
 

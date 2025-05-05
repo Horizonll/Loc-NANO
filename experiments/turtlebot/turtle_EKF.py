@@ -23,7 +23,7 @@ def load_map(map_path, resolution, origin):
     wx = x_indices * resolution + origin[0]
     wy = (map_img.shape[0] - y_indices) * resolution + origin[1]
     map_points = np.column_stack((wx, wy, np.zeros_like(wx)))
-    return map_points + np.random.normal(0, 0.5, map_points.shape)
+    return map_points
 
 
 def lidar_to_point_cloud(lidar_data, angle_min, angle_max):
@@ -84,7 +84,7 @@ def scan_to_pose(scan, map_points, angle_min, angle_max, init_pose):
     x, y, yaw = extract_pose(transformation)
     dx1, dy1 = x - 10, y - 10
     dx2, dy2 = x + 10, y + 10
-    dx3, dy3 = x - 10, y + 10
+    dx3, dy3 = x - 5, y + 10
     y1 = sqrt(dx1**2 + dy1**2)
     y2 = sqrt(dx2**2 + dy2**2)
     y3 = sqrt(dx3**2 + dy3**2)
@@ -101,7 +101,7 @@ def synchronize_data(time_gt, scan_t, wheel_t, odom_t, scan, wheel_vel, odom):
         wheel_vel_.append(wheel_vel[np.argmin(np.abs(wheel_t - t))])
         odom_.append(odom[np.argmin(np.abs(odom_t - t))])
     return (
-        np.array(scan_) + np.random.normal(0, 0.5, (len(scan_), len(scan_[0]))),
+        np.array(scan_) + np.random.normal(0, 1, (len(scan_), len(scan_[0]))),
         np.array(wheel_vel_),
         np.array(odom_),
     )
@@ -127,7 +127,7 @@ def main():
     x0 = np.array([pos_gt[0, 0], pos_gt[0, 1], pos_gt[0, 2]])
     model = TurtleBot()
     model.x0 = x0
-    filter = UKF(model)
+    filter = EKF(model)
 
     x_pred, all_time, scan_pose = [], [], []
     for i in tqdm(range(len(pos_gt) - 1)):
@@ -146,7 +146,7 @@ def main():
         #         + (filter.x[1] - scan_pose[-1][1]) ** 2
         #     )
         # )
-        np.save("./results/ukf.npy", np.array(x_pred))
+        np.save("./results/ekf.npy", np.array(x_pred))
     # np.save("./results/turtle_scan_pose.npy", np.array(scan_pose))
     print(f"{np.mean(all_time):.4f} s")
 

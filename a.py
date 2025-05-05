@@ -121,7 +121,7 @@ if __name__ == "__main__":
     angle_max = np.pi / 2
     # for i in range(0, len(scan), 10):
     i = 1200
-    lidar_data = scan[i]
+    lidar_data = scan[i] + np.random.normal(0, 0.5, (len(scan[i]),))
     lidar_points = lidar_to_point_cloud(lidar_data, angle_min, angle_max)
     print(pos_gt[i])
     transformation = icp_registration(

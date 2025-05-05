@@ -84,7 +84,7 @@ def scan_to_pose(scan, map_points, angle_min, angle_max, init_pose):
     x, y, yaw = extract_pose(transformation)
     dx1, dy1 = x - 10, y - 10
     dx2, dy2 = x + 10, y + 10
-    dx3, dy3 = x - 10, y + 10
+    dx3, dy3 = x - 5, y + 10
     y1 = sqrt(dx1**2 + dy1**2)
     y2 = sqrt(dx2**2 + dy2**2)
     y3 = sqrt(dx3**2 + dy3**2)
