@@ -3,7 +3,6 @@ from autograd import jacobian
 from .model import Model
 import cv2
 import matplotlib.pyplot as plt
-from math import sqrt
 import yaml
 
 
@@ -16,8 +15,9 @@ class TurtleBot(Model):
     ):
         super().__init__(self)
         self.dim_x = 3
-        self.dim_y = 3
+        self.dim_y = 10
         self.dt = 0.02
+        self.landmarks = []
         self.x0 = np.array([0.0, 0.0, 0.0])
         self.P0 = np.diag(np.array([0.1, 0.1, 0.1])) ** 2
         self.state_outlier_flag = state_outlier_flag
@@ -75,8 +75,7 @@ class TurtleBot(Model):
         #             break
         #     distances[i] = distance
         # return distances
-        position = np.array([[10, 10], [-10, -10], [5, -10]])
-        distances = np.sqrt(np.sum((x[:2] - position) ** 2, axis=1) - 0.1)
+        distances = np.sqrt(np.sum((x[:2] - self.landmarks) ** 2, axis=1))
         return distances
 
     def jac_h(self, x):

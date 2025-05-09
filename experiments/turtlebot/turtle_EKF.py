@@ -1,17 +1,22 @@
 import sys
-import time
 import os
-from math import sqrt
-import autograd.numpy as np
+import numpy as np
 from tqdm import tqdm
 import cv2
 import open3d as o3d
 
 sys.path.append(os.path.abspath("./"))
-from filter import EKF, UKF, PF, NANO
+from filter import EKF, UKF, PF
 from environ import TurtleBot
 
 np.random.seed(42)
+map_path = "./data/sim/map.pgm"
+resolution = 0.05
+origin = [-10, -10, 0]
+map = cv2.rotate(
+    cv2.imread(map_path, cv2.IMREAD_GRAYSCALE),
+    cv2.ROTATE_90_CLOCKWISE * 2,
+)
 
 
 def load_map(map_path, resolution, origin):
@@ -82,13 +87,7 @@ def scan_to_pose(scan, map_points, angle_min, angle_max, init_pose):
         lidar_points, map_points, init_pose[0], init_pose[1], init_pose[2] + np.pi
     )
     x, y, yaw = extract_pose(transformation)
-    dx1, dy1 = x - 10, y - 10
-    dx2, dy2 = x + 10, y + 10
-    dx3, dy3 = x - 5, y + 10
-    y1 = sqrt(dx1**2 + dy1**2)
-    y2 = sqrt(dx2**2 + dy2**2)
-    y3 = sqrt(dx3**2 + dy3**2)
-    return x, y, y1, y2, y3
+    return x, y, yaw
 
 
 def synchronize_data(time_gt, scan_t, wheel_t, odom_t, scan, wheel_vel, odom):
@@ -107,10 +106,35 @@ def synchronize_data(time_gt, scan_t, wheel_t, odom_t, scan, wheel_vel, odom):
     )
 
 
+def get_landmarks_and_y(x, y, yaw, _scan, num_landmarks):
+    landmarks = []
+    angles = np.linspace(np.pi, -np.pi, 640)
+    landmarks_indices = np.random.choice(len(angles), num_landmarks, replace=False)
+    angles = angles[landmarks_indices]
+    scan = _scan[landmarks_indices]
+    cos_angles = np.cos(yaw + angles)
+    sin_angles = np.sin(yaw + angles)
+    for i in range(num_landmarks):
+        for distance in np.arange(0, 12, 0.05):
+            laser_x = x + distance * cos_angles[i]
+            laser_y = y + distance * sin_angles[i]
+            map_x = int((laser_x - origin[0]) / resolution)
+            map_y = int((laser_y - origin[1]) / resolution)
+            if (
+                map[map_y, map_x] == 0
+                or map_x < 0
+                or map_x >= map.shape[1]
+                or map_y < 0
+                or map_y >= map.shape[0]
+            ):
+                landmarks.append([laser_x, laser_y])
+                break
+    if len(landmarks) < num_landmarks:
+        return get_landmarks_and_y(x, y, yaw, _scan, num_landmarks)
+    return landmarks, scan
+
+
 def main():
-    map_path = "./data/sim/map.pgm"
-    resolution = 0.05
-    origin = [-10, -10, 0]
     angle_min = -np.pi * 1.5
     angle_max = np.pi / 2
     map_points = load_map(map_path, resolution, origin)
@@ -128,28 +152,23 @@ def main():
     model = TurtleBot()
     model.x0 = x0
     filter = EKF(model)
-
-    x_pred, all_time, scan_pose = [], [], []
+    x_pred = []
+    scan_pose_ = []
     for i in tqdm(range(len(pos_gt) - 1)):
         u = odom[i + 1] - odom[i]
-        y = scan_to_pose(scan[i], map_points, angle_min, angle_max, filter.x)
-        # scan_pose.append(y[:2])
-        start_time = time.time()
+        scan_pose = scan_to_pose(scan[i], map_points, angle_min, angle_max, filter.x)
+        model.landmarks, y = get_landmarks_and_y(
+            scan_pose[0], scan_pose[1], scan_pose[2], scan[i], 10
+        )
         filter.predict(u)
-        filter.update(y[-3:])
-        end_time = time.time()
+        # filter.update(y)
         x_pred.append(filter.x)
-        all_time.append(end_time - start_time)
-        # print(
-        #     sqrt(
-        #         (filter.x[0] - scan_pose[-1][0]) ** 2
-        #         + (filter.x[1] - scan_pose[-1][1]) ** 2
-        #     )
-        # )
+        scan_pose_.append(scan_pose[:2])
         np.save("./results/ekf.npy", np.array(x_pred))
-    # np.save("./results/turtle_scan_pose.npy", np.array(scan_pose))
-    print(f"{np.mean(all_time):.4f} s")
+    np.save("./results/scan_pose.npy", np.array(scan_pose_))
 
 
 if __name__ == "__main__":
+    if not os.path.exists("./results"):
+        os.makedirs("./results")
     main()

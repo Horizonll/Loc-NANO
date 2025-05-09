@@ -10,3 +10,4 @@ seaborn
 tqdm
 open3d
 opencv-python
+PyYAML
