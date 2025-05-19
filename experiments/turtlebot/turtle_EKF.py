@@ -4,9 +4,10 @@ import numpy as np
 from tqdm import tqdm
 import cv2
 import open3d as o3d
+from math import sqrt
 
 sys.path.append(os.path.abspath("./"))
-from filter import EKF, UKF, PF
+from filter import EKF, UKF, PF, NANO
 from environ import TurtleBot
 
 np.random.seed(42)
@@ -87,7 +88,13 @@ def scan_to_pose(scan, map_points, angle_min, angle_max, init_pose):
         lidar_points, map_points, init_pose[0], init_pose[1], init_pose[2] + np.pi
     )
     x, y, yaw = extract_pose(transformation)
-    return x, y, yaw
+    dx1, dy1 = x - 10, y - 10
+    dx2, dy2 = x + 10, y - 10
+    dx3, dy3 = x + 10, y + 10
+    y1 = sqrt(dx1**2 + dy1**2)
+    y2 = sqrt(dx2**2 + dy2**2)
+    y3 = sqrt(dx3**2 + dy3**2)
+    return x, y, y1, y2, y3
 
 
 def synchronize_data(time_gt, scan_t, wheel_t, odom_t, scan, wheel_vel, odom):
@@ -134,7 +141,7 @@ def get_landmarks_and_y(x, y, yaw, _scan, num_landmarks):
     return landmarks, scan
 
 
-def main():
+def main(filter_type="ukf"):
     angle_min = -np.pi * 1.5
     angle_max = np.pi / 2
     map_points = load_map(map_path, resolution, origin)
@@ -144,31 +151,43 @@ def main():
     wheel_vel, wheel_t = data["wheel_vels"], data["wheel_t"]
     pos_gt, time_gt = data["ground_truth"], data["ground_truth_t"]
     odom, odom_t = data["odom"], data["odom_t"]
-
     scan, wheel_vel, odom = synchronize_data(
         time_gt, scan_t, wheel_t, odom_t, scan, wheel_vel, odom
     )
     x0 = np.array([pos_gt[0, 0], pos_gt[0, 1], pos_gt[0, 2]])
     model = TurtleBot()
     model.x0 = x0
-    filter = EKF(model)
+    if filter_type == "ekf":
+        filter = EKF(model)
+    elif filter_type == "pf":
+        filter = PF(model)
+    elif filter_type == "ukf":
+        filter = UKF(model)
+    elif filter_type == "nano":
+        filter = NANO(model, n_iterations=2, init_type="iekf", iekf_max_iter=2, lr=0.5)
+
     x_pred = []
     scan_pose_ = []
     for i in tqdm(range(len(pos_gt) - 1)):
         u = odom[i + 1] - odom[i]
+        dx = u[0] * np.cos(odom[i][2]) + u[1] * np.sin(odom[i][2])
+        dy = -u[0] * np.sin(odom[i][2]) + u[1] * np.cos(odom[i][2])
+        u[0] = dx * np.cos(filter.x[2]) - dy * np.sin(filter.x[2])
+        u[1] = dx * np.sin(filter.x[2]) + dy * np.cos(filter.x[2])
         scan_pose = scan_to_pose(scan[i], map_points, angle_min, angle_max, filter.x)
-        model.landmarks, y = get_landmarks_and_y(
-            scan_pose[0], scan_pose[1], scan_pose[2], scan[i], 10
-        )
+        y = scan_pose[-3:]
         filter.predict(u)
-        # filter.update(y)
+        filter.update(y)
         x_pred.append(filter.x)
         scan_pose_.append(scan_pose[:2])
-        np.save("./results/ekf.npy", np.array(x_pred))
+    np.save(f"./results/{filter_type}.npy", np.array(x_pred))
     np.save("./results/scan_pose.npy", np.array(scan_pose_))
 
 
 if __name__ == "__main__":
     if not os.path.exists("./results"):
         os.makedirs("./results")
-    main()
+    main("ekf")
+    main("ukf")
+    # main("pf")
+    main("nano")

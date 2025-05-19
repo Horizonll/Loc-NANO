@@ -15,9 +15,9 @@ class TurtleBot(Model):
     ):
         super().__init__(self)
         self.dim_x = 3
-        self.dim_y = 10
+        self.dim_y = 3
         self.dt = 0.02
-        self.landmarks = []
+        self.landmarks = [[10, 10], [-10, 10], [-10, -10]]
         self.x0 = np.array([0.0, 0.0, 0.0])
         self.P0 = np.diag(np.array([0.1, 0.1, 0.1])) ** 2
         self.state_outlier_flag = state_outlier_flag
@@ -26,7 +26,7 @@ class TurtleBot(Model):
         self.alpha = 2.0
         self.beta = 5.0
         self.process_std = np.array([0.1] * self.dim_x)
-        self.observation_std = np.array([0.1] * self.dim_y)
+        self.observation_std = np.array([0.5] * self.dim_y)
         self.obs_var = np.ones(self.dim_y) * 0.1
         self.Q = np.diag(self.process_std**2)
         self.R = np.diag(self.observation_std**2)
@@ -79,7 +79,7 @@ class TurtleBot(Model):
         return distances
 
     def jac_h(self, x):
-        epsilon = 5e-3
+        epsilon = 5e-4
         """
         使用差分法计算向量值函数的 Jacobian 矩阵
         :param x: 输入向量
